@@ -40,7 +40,12 @@ class ConsulClusterStateChangesTest {
         .withAgentUri(URI("http://localhost:${consul.httpPort}"))
         .build()
     private val readinessStateHandler = Mockito.spy(ReadinessStateHandler::class.java)
-    private val changes = ConsulServiceChanges(watcher = watcher, readinessStateHandler = readinessStateHandler)
+    private val serviceWatchPolicy = Mockito.spy(NoOpServiceWatchPolicy::class.java)
+    private val changes = ConsulServiceChanges(
+        watcher = watcher,
+        readinessStateHandler = readinessStateHandler,
+        serviceWatchPolicy = serviceWatchPolicy
+    )
     private val client = AgentConsulClient("localhost", consul.httpPort)
 
     @BeforeEach
@@ -86,6 +91,26 @@ class ConsulClusterStateChangesTest {
             .then { verify(readinessStateHandler).ready() }
             .then { registerService(id = "service3", name = "service3") }
             .thenRequest(1) // events: add(service3)
+            .expectNextMatches { it.serviceNames() == setOf("consul", "service1", "service2", "service3") }
+            .thenCancel()
+            .verify()
+    }
+
+    @Test
+    fun `should produce event with only matching services`() {
+        val filteredServiceName = "serviceFiltered"
+        Mockito.doReturn(false).`when`(serviceWatchPolicy).shouldBeWatched(filteredServiceName, Mockito.any())
+        registerService(id = "service1", name = "service1")
+        registerService(id = "service2", name = "service2")
+
+        StepVerifier.create(changes.watchState())
+            .expectNextMatches { it.serviceNames() == setOf("consul", "service1", "service2") }
+            .then { verify(readinessStateHandler).ready() }
+            .then { registerService(id = "service3", name = "service3") }
+            .thenRequest(1) // events: add(service3)
+            .expectNextMatches { it.serviceNames() == setOf("consul", "service1", "service2", "service3") }
+            .then { registerService(id = filteredServiceName, name = filteredServiceName)}
+            .thenRequest(1) // events: add(filteredService)
             .expectNextMatches { it.serviceNames() == setOf("consul", "service1", "service2", "service3") }
             .thenCancel()
             .verify()
