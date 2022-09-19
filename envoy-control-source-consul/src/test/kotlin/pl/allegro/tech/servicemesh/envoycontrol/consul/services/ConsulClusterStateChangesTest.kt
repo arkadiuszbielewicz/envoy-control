@@ -109,7 +109,7 @@ class ConsulClusterStateChangesTest {
             .then { registerService(id = "service3", name = "service3") }
             .thenRequest(1) // events: add(service3)
             .expectNextMatches { it.serviceNames() == setOf("consul", "service1", "service2", "service3") }
-            .then { registerService(id = filteredServiceName, name = filteredServiceName)}
+            .then { registerService(id = filteredServiceName, name = filteredServiceName) }
             .thenRequest(1) // events: add(filteredService)
             .expectNextMatches { it.serviceNames() == setOf("consul", "service1", "service2", "service3") }
             .thenCancel()
